@@ -128,6 +128,9 @@ jobs:
         with:
           name: lighthouse-report
           path: .lighthouseci/
+          # .lighthouseci is a dotfile directory, which upload-artifact skips by
+          # default — without this the step "succeeds" while uploading nothing.
+          include-hidden-files: true
           retention-days: 14
 
   deploy:
