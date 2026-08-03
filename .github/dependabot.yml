@@ -1,0 +1,20 @@
+version: 2
+updates:
+  # Action versions are pinned to major tags, so this mostly catches major bumps
+  # and the one action pinned to an exact version (lighthouse-ci-action).
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
+    commit-message:
+      prefix: 'ci'
+
+  # devDependencies are pinned exactly, which means they never move on their own.
+  # Dependabot is what moves them, and CI is what proves the move is safe.
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: monthly
+    commit-message:
+      prefix: 'chore'
+    versioning-strategy: increase

@@ -1,0 +1,162 @@
+name: CI/CD
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# A newer push to the same branch makes the in-flight run pointless. The Pages
+# deploy has its own group further down, because cancelling mid-deploy is not safe.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  NODE_VERSION: '22'
+  PLAYWRIGHT_VERSION: '1.62.1'
+
+jobs:
+  static:
+    name: HTML, links & size budget
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      # No lockfile is committed, so `npm install` rather than `npm ci`. Both
+      # devDependencies are pinned to exact versions in package.json, which gives
+      # the same reproducibility without a lockfile nobody can regenerate locally
+      # (this machine has no node installed).
+      - run: npm install --no-audit --no-fund
+
+      - name: Validate HTML
+        run: npm run lint:html
+
+      - name: Assemble the publishable site
+        run: npm run build
+
+      - name: Check size budget
+        run: npm run budget
+
+      - name: Check links
+        uses: lycheeverse/lychee-action@v2
+        with:
+          args: >-
+            --config lychee.toml
+            merchant-agent-platform-1.html
+            PRESENTATION-SCRIPT.md
+          fail: true
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+  e2e:
+    name: Browser smoke tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - run: npm install --no-audit --no-fund
+
+      # ~130 MB download; keyed on the pinned Playwright version so it only
+      # re-downloads when the dependency actually moves.
+      - name: Restore browser cache
+        id: browser-cache
+        uses: actions/cache@v6
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ env.PLAYWRIGHT_VERSION }}
+
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+
+      # Both projects (desktop + Pixel 5) are Chromium, so one browser covers all.
+      - name: Run tests
+        run: npm test
+
+      - name: Upload report
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: playwright-report
+          path: playwright-report/
+          retention-days: 14
+
+  lighthouse:
+    name: Performance budget
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      # build.mjs is pure node stdlib, so no dependency install is needed here.
+      - name: Assemble the publishable site
+        run: npm run build
+
+      - name: Run Lighthouse
+        uses: treosh/lighthouse-ci-action@12.6.2
+        with:
+          configPath: ./lighthouserc.json
+          # Deliberately NOT uploading to temporary-public-storage: the reports
+          # embed the page, and the page contains a real merchant's revenue.
+          uploadArtifacts: false
+
+      - name: Upload report
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: lighthouse-report
+          path: .lighthouseci/
+          retention-days: 14
+
+  deploy:
+    name: Deploy to GitHub Pages
+    needs: [static, e2e, lighthouse]
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+
+    # Never cancel a deploy that is already writing to Pages.
+    concurrency:
+      group: pages
+      cancel-in-progress: false
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - uses: actions/configure-pages@v6
+
+      - name: Assemble the publishable site
+        run: npm run build
+
+      - uses: actions/upload-pages-artifact@v5
+        with:
+          path: dist
+
+      - name: Deploy
+        id: deploy
+        uses: actions/deploy-pages@v5

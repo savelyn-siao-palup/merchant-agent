@@ -1,0 +1,20 @@
+{
+  "name": "merchant-agent-platform",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Afu · Revenue Partner Console — a single-file, zero-dependency static console for Furday Pet Life.",
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "budget": "node scripts/check-budget.mjs",
+    "lint:html": "html-validate merchant-agent-platform-1.html",
+    "test": "playwright test",
+    "test:ui": "playwright test --ui",
+    "serve": "python3 -m http.server 4173 --bind 127.0.0.1 --directory dist",
+    "check": "npm run lint:html && npm run build && npm run budget && npm test"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.62.1",
+    "html-validate": "11.6.2"
+  }
+}

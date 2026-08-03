@@ -1,0 +1,23 @@
+# Link checking. Today the console has no outbound links at all — the only absolute
+# URL in it is the SVG namespace — so this job is a guard for what gets added later
+# rather than something that finds problems now.
+
+# Bot-blocking and rate limiting are not dead links.
+accept = [200, 206, 301, 302, 303, 307, 308, 403, 429]
+
+exclude = [
+  # XML namespace identifiers are not resolvable addresses.
+  '^http://www\.w3\.org/\d{4}/svg$',
+  '^https?://(localhost|127\.0\.0\.1)',
+]
+
+exclude_mail = true
+
+# In-page anchors are hash routes handled by the app's router, not element ids,
+# so fragment resolution would report every nav link as broken.
+include_fragments = false
+
+max_retries = 2
+timeout = 20
+max_concurrency = 8
+no_progress = true

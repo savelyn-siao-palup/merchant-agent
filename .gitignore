@@ -1,0 +1,17 @@
+node_modules/
+dist/
+
+# Playwright
+test-results/
+playwright-report/
+blob-report/
+playwright/.cache/
+
+# Lighthouse CI
+.lighthouseci/
+
+# OS / editor noise
+.DS_Store
+*.swp
+.idea/
+.vscode/
