@@ -181,20 +181,62 @@ test.describe('routing', () => {
 });
 
 test.describe('layout', () => {
-  test('the page never scrolls sideways', async ({ page }) => {
-    await page.goto('/');
-
+  /**
+   * body sets `overflow-x: hidden`, so content wider than the viewport is not
+   * scrollable — it is silently cut off. That makes this the one layout failure
+   * mode with no visible symptom: a table or a chart just loses its right-hand
+   * columns and the page still looks intentional.
+   *
+   * Children of a horizontally scrollable box (.table-wrap and friends) are
+   * exempt, since being wider than their container is the entire point of them.
+   */
+  test('no content is clipped off the right edge', async ({ page }) => {
     for (const view of VIEWS) {
       await page.goto(`/#${view.id}`);
-      const overflow = await page.evaluate(() => ({
-        scroll: document.documentElement.scrollWidth,
-        client: document.documentElement.clientWidth,
-      }));
-      // 1px of slack for sub-pixel rounding at fractional device pixel ratios.
-      expect(
-        overflow.scroll,
-        `#${view.id} overflows horizontally (${overflow.scroll} > ${overflow.client})`,
-      ).toBeLessThanOrEqual(overflow.client + 1);
+
+      const offenders = await page.evaluate(() => {
+        const viewport = document.documentElement.clientWidth;
+        const scrolls = (el) => ['auto', 'scroll'].includes(getComputedStyle(el).overflowX);
+
+        const over = [];
+        for (const el of document.body.querySelectorAll('*')) {
+          const box = el.getBoundingClientRect();
+          // 1px of slack for sub-pixel rounding at fractional pixel ratios.
+          if (box.width === 0 || box.right <= viewport + 1) continue;
+
+          let ancestor = el.parentElement;
+          let exempt = false;
+          while (ancestor && ancestor !== document.body) {
+            if (scrolls(ancestor)) {
+              exempt = true;
+              break;
+            }
+            ancestor = ancestor.parentElement;
+          }
+          if (!exempt) over.push(el);
+        }
+
+        // Report only the outermost offender in each chain — the ancestor is the
+        // thing to fix, and its descendants are just carried along by it.
+        const flagged = new Set(over);
+        return over
+          .filter((el) => {
+            let a = el.parentElement;
+            while (a && a !== document.body) {
+              if (flagged.has(a)) return false;
+              a = a.parentElement;
+            }
+            return true;
+          })
+          .slice(0, 10)
+          .map((el) => {
+            const box = el.getBoundingClientRect();
+            const cls = String(el.className || '').trim().split(/\s+/).filter(Boolean).join('.');
+            return `${el.tagName.toLowerCase()}${cls ? `.${cls}` : ''} — ${Math.round(box.width)}px wide, right edge at ${Math.round(box.right)} (viewport ${viewport})`;
+          });
+      });
+
+      expect(offenders, `#${view.id} clips content off the right edge`).toEqual([]);
     }
   });
 });
