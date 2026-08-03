@@ -1097,7 +1097,10 @@ hr { border: 0; border-top: 1px solid var(--divider); margin: var(--sp-5) 0; }
 .memo__conf { display: flex; align-items: center; gap: var(--sp-2); }
 .memo__conf-label { font-size: var(--fs-xs); color: var(--text-3); }
 .memo__conf-val { font-size: var(--fs-sm); font-weight: var(--fw-semibold); }
-.memo__verified { margin-left: auto; font-size: var(--fs-sm); color: var(--text-3); white-space: nowrap; }
+/* Two lines of provenance, split by a <br>. It cannot be nowrap: the second line
+   carries the verification method, which runs long enough to overflow the memo's
+   grid column — and body clips overflow, so the tail was being cut off, not scrolled. */
+.memo__verified { margin-left: auto; min-width: 0; font-size: var(--fs-sm); color: var(--text-3); }
 .memo__verified.is-stale { color: var(--wrn-text); }
 .memo--stale { border-color: var(--wrn-border); background: linear-gradient(var(--wrn-bg), var(--surface-1) 40%); }
 .memo-grid { display: grid; gap: var(--sp-4); grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); }
@@ -1109,7 +1112,9 @@ hr { border: 0; border-top: 1px solid var(--divider); margin: var(--sp-5) 0; }
   box-shadow: var(--sh-1);
   padding: var(--sp-4) var(--sp-5) var(--sp-5);
 }
-.chart__head { display: flex; align-items: flex-start; gap: var(--sp-4); margin-bottom: var(--sp-4); }
+/* Wraps so the legend block can drop below the title instead of being pushed off
+   the right edge on a phone. */
+.chart__head { display: flex; flex-wrap: wrap; align-items: flex-start; gap: var(--sp-4); margin-bottom: var(--sp-4); }
 .chart__title { font-size: var(--fs-md); font-weight: var(--fw-semibold); }
 .chart__sub { margin-top: 2px; font-size: var(--fs-sm); color: var(--text-2); }
 .chart__tools { margin-left: auto; display: flex; align-items: center; gap: var(--sp-2); flex: none; }
@@ -1697,7 +1702,9 @@ hr { border: 0; border-top: 1px solid var(--divider); margin: var(--sp-5) 0; }
 .chart__plot{min-height:40px}
 .chart__table table{font-size:var(--fs-sm)}
 /* Chart card shell: legend / control row / footnote (produced by chartCard) */
-.chart__ctl{margin-left:auto;display:flex;align-items:center;gap:var(--sp-3);flex:none;flex-wrap:wrap}
+/* Shrinkable, not flex:none — its legends are nowrap, so a rigid box could not fit
+   a narrow viewport and overflowed the chart card. */
+.chart__ctl{margin-left:auto;display:flex;align-items:center;gap:var(--sp-3);flex:0 1 auto;min-width:0;flex-wrap:wrap}
 .chart__lgd{display:inline-flex;align-items:center;gap:6px;font-size:var(--fs-sm);color:var(--text-2);white-space:nowrap}
 .chart__key{width:16px;height:3px;border-radius:2px;flex:none;background:var(--k,var(--cat-1))}
 .chart__key--dash{height:0;background:none;border-top:2px dashed var(--k,var(--series-hold))}
