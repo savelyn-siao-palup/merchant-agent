@@ -31,7 +31,29 @@ request, and on demand. Three checks run in parallel; the deploy waits for all t
 | **HTML, links & size budget** | `html-validate` on the static shell, `lychee` on outbound links, and a hard ceiling on page weight |
 | **Browser smoke tests** | Playwright loads the real page in Chromium at desktop and mobile widths |
 | **Performance budget** | Lighthouse, 3 runs, desktop preset, with score and byte-weight assertions |
-| **Deploy to GitHub Pages** | Runs only on `main`, only after all three pass |
+| **Deploy to GitHub Pages** | `main` only, after all three pass |
+| **Deploy to Firebase Hosting** | `main` only, after all three pass — a second, independent live target |
+| **PR preview on Firebase** | Pull requests only: an isolated URL per PR, expiring after 7 days |
+
+### Where it deploys
+
+Two live targets, both gated on the same three checks and independent of each
+other — if one platform fails, the other still ships:
+
+| | URL | Notes |
+| --- | --- | --- |
+| GitHub Pages | https://savelyn-siao-palup.github.io/merchant-agent/ | Publishes from `main` via `actions/deploy-pages`; no `gh-pages` branch involved |
+| Firebase Hosting | https://merchant-agent-console.web.app | Adds per-PR preview channels and one-command rollback |
+
+Neither deploy uses a stored secret. Pages authenticates with the workflow's own
+OIDC token; Firebase exchanges the same token for short-lived GCP credentials
+through Workload Identity Federation. The WIF provider carries an attribute
+condition pinning it to `savelyn-siao-palup/merchant-agent`, so no other
+repository can mint credentials for the deploy service account — and there is no
+service-account JSON key in existence to leak or rotate.
+
+Rolling back Firebase is `firebase hosting:rollback`. Rolling back Pages means
+reverting the commit and letting CI redeploy.
 
 Reports from the test and Lighthouse jobs upload as run artifacts (14-day retention).
 Lighthouse reports are deliberately **not** sent to its public temporary storage,
