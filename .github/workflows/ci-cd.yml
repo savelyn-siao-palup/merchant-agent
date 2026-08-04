@@ -19,6 +19,14 @@ env:
   NODE_VERSION: '22'
   PLAYWRIGHT_VERSION: '1.62.1'
 
+  # Firebase Hosting. Authentication is keyless: the provider below is locked to
+  # this repository by an attribute condition, so no other repo can mint a token
+  # for this service account, and there is no JSON key anywhere to leak or rotate.
+  FIREBASE_TOOLS_VERSION: '15.25.1'
+  GCP_PROJECT: merchant-agent-console
+  GCP_WIF_PROVIDER: projects/146537768310/locations/global/workloadIdentityPools/github/providers/merchant-agent
+  GCP_SERVICE_ACCOUNT: github-actions-deploy@merchant-agent-console.iam.gserviceaccount.com
+
 jobs:
   static:
     name: HTML, links & size budget
@@ -172,3 +180,108 @@ jobs:
       - name: Deploy
         id: deploy
         uses: actions/deploy-pages@v5
+
+  # Second live target, gated on exactly the same three checks as Pages. The two
+  # deploys are independent: if Firebase is down or its credentials expire, the
+  # Pages URL still ships, and vice versa.
+  deploy-firebase:
+    name: Deploy to Firebase Hosting
+    needs: [static, e2e, lighthouse]
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
+      id-token: write # the OIDC token exchanged for GCP credentials
+
+    concurrency:
+      group: firebase-live
+      cancel-in-progress: false
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Assemble the publishable site
+        run: npm run build
+
+      - uses: google-github-actions/auth@v3
+        with:
+          project_id: ${{ env.GCP_PROJECT }}
+          workload_identity_provider: ${{ env.GCP_WIF_PROVIDER }}
+          service_account: ${{ env.GCP_SERVICE_ACCOUNT }}
+
+      # firebase-tools picks up the credentials file that the auth step exports
+      # via GOOGLE_APPLICATION_CREDENTIALS.
+      - name: Deploy
+        id: deploy
+        run: |
+          npx --yes firebase-tools@${{ env.FIREBASE_TOOLS_VERSION }} deploy \
+            --only hosting \
+            --project ${{ env.GCP_PROJECT }} \
+            --non-interactive
+
+      - name: Summarise
+        run: echo "Live at https://${{ env.GCP_PROJECT }}.web.app" >> "$GITHUB_STEP_SUMMARY"
+
+  # What Pages cannot do: a real, isolated URL per pull request. Channels expire on
+  # their own, so review links do not accumulate forever.
+  preview-firebase:
+    name: PR preview on Firebase
+    needs: [static, e2e, lighthouse]
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
+      id-token: write
+      pull-requests: write # to post the preview URL back onto the PR
+
+    concurrency:
+      group: firebase-preview-${{ github.event.number }}
+      cancel-in-progress: true
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Assemble the publishable site
+        run: npm run build
+
+      - uses: google-github-actions/auth@v3
+        with:
+          project_id: ${{ env.GCP_PROJECT }}
+          workload_identity_provider: ${{ env.GCP_WIF_PROVIDER }}
+          service_account: ${{ env.GCP_SERVICE_ACCOUNT }}
+
+      - name: Deploy preview channel
+        id: preview
+        run: |
+          npx --yes firebase-tools@${{ env.FIREBASE_TOOLS_VERSION }} hosting:channel:deploy \
+            "pr-${{ github.event.number }}" \
+            --project ${{ env.GCP_PROJECT }} \
+            --expires 7d \
+            --non-interactive \
+            --json > channel.json
+          URL=$(node -e "
+            const r = require('./channel.json').result;
+            const site = Object.values(r)[0];
+            console.log(site.url);
+          ")
+          echo "url=$URL" >> "$GITHUB_OUTPUT"
+          echo "Preview: $URL" >> "$GITHUB_STEP_SUMMARY"
+
+      # --edit-last keeps one comment per PR instead of a new one on every push.
+      - name: Post the URL on the PR
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh pr comment "${{ github.event.number }}" \
+            --body "Preview for \`${{ github.sha }}\`: ${{ steps.preview.outputs.url }} (expires in 7 days)" \
+            --edit-last --create-if-none
