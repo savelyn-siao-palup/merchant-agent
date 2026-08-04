@@ -34,8 +34,14 @@ request, and on demand. Three checks run in parallel; the deploy waits for all t
 | **Deploy to GitHub Pages** | Runs only on `main`, only after all three pass |
 
 Reports from the test and Lighthouse jobs upload as run artifacts (14-day retention).
-Lighthouse reports are deliberately **not** sent to its public temporary storage —
-they embed the page, and the page has the merchant's numbers in it.
+Lighthouse reports are deliberately **not** sent to its public temporary storage,
+which would put a copy of the page on a third-party host.
+
+Lighthouse thresholds are 0.95 across all four categories. Current scores are
+performance 1.00, accessibility 0.98, best practices 1.00, SEO 1.00, with LCP at
+0.4s and 0ms total blocking time — so the gate has real margin without being
+decorative. The one accessibility deduction is `heading-order`: some pages jump a
+heading level. Worth fixing, not yet fixed.
 
 ### What the tests actually check
 
