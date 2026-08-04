@@ -15,3 +15,6 @@ playwright/.cache/
 *.swp
 .idea/
 .vscode/
+
+# Written into the workspace by the lychee action
+lychee/
