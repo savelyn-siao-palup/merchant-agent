@@ -14,7 +14,7 @@
     "check": "npm run lint:html && npm run build && npm run budget && npm test"
   },
   "devDependencies": {
-    "@playwright/test": "1.62.1",
+    "@playwright/test": "1.63.0",
     "html-validate": "11.6.2"
   }
 }
